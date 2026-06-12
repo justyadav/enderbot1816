@@ -15,13 +15,19 @@ logger = logging.getLogger("Bot.Main")
 load_dotenv()
 
 class ModularBot(commands.Bot):
-    def __init__(self):
+    def __init__(self, proxy_url=None):
         intents = Intents.default()
         intents.message_content = True
         intents.members = True
         intents.voice_states = True
         
-        super().__init__(command_prefix=tuple(), intents=intents, help_command=None)
+        # Inject the proxy directly into the parent initialization constructor
+        super().__init__(
+            command_prefix=tuple(), 
+            intents=intents, 
+            help_command=None,
+            proxy=proxy_url
+        )
 
     async def setup_hook(self):
         # Initialize Database connection
@@ -53,21 +59,21 @@ class ModularBot(commands.Bot):
         logger.info(f"Authenticated as {self.user} (ID: {self.user.id})")
 
 async def main():
-    bot = ModularBot()
     token = os.getenv("DISCORD_TOKEN")
     port = int(os.getenv("DASHBOARD_PORT", 10000))
-
-    # Pull the proxy configuration string if provided by the environment
     proxy_url = os.getenv("DISCORD_PROXY_URL")
+
     if proxy_url:
-        logger.info(f"Routing Discord traffic through proxy endpoint: {proxy_url}")
+        logger.info(f"Initializing bot engine with proxy routing: {proxy_url}")
     else:
         logger.warning("No proxy URL defined. Attempting direct connection to Discord API...")
 
+    # Instantiate the bot with the proxy parameter included 
+    bot = ModularBot(proxy_url=proxy_url)
+
     try:
-        # Pass the proxy explicitly to bot.start() so discord.py handles the tunnel route natively
         await asyncio.gather(
-            bot.start(token, reconnect=True, proxy=proxy_url),
+            bot.start(token, reconnect=True),
             run_dashboard(bot, port)
         )
     except KeyboardInterrupt:
@@ -77,5 +83,4 @@ async def main():
             await bot.close()
 
 if __name__ == "__main__":
-    asyncio.run(main())
     asyncio.run(main())
