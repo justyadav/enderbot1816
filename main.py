@@ -56,7 +56,7 @@ class ModularBot(commands.Bot):
 async def main():
     bot = ModularBot()
     token = os.getenv("DISCORD_TOKEN")
-    port = int(os.getenv("DASHBOARD_PORT", 5000))
+    port = int(os.getenv("DASHBOARD_PORT", 19000))
 
     # Clean error catching logic wrapping both asynchronous runtimes together
     try:
