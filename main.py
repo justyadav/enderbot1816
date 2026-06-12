@@ -1,14 +1,14 @@
 import os
 import asyncio
 import logging
-from discord import Intents, Interaction
+from discord import Intents
 from discord.ext import commands
 from dotenv import load_dotenv
 
 from database import db_manager
 from dashboard import run_dashboard
 
-# Configure rigorous production logging
+# Configure production logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger("Bot.Main")
 
@@ -16,7 +16,6 @@ load_dotenv()
 
 class ModularBot(commands.Bot):
     def __init__(self):
-        # Configure application intents explicitly
         intents = Intents.default()
         intents.message_content = True
         intents.members = True
@@ -28,17 +27,18 @@ class ModularBot(commands.Bot):
         # Initialize Database connection
         db_manager.connect()
         
-        # Iteratively read and register Cogs from the cogs module directory
-        for filename in os.listdir("./cogs"):
-            if filename.endswith(".py") and not filename.startswith("__"):
-                cog_name = f"cogs.{filename[:-3]}"
-                try:
-                    await self.load_extension(cog_name)
-                    logger.info(f"Successfully loaded extension: {cog_name}")
-                except Exception as e:
-                    logger.error(f"Failed to load extension {cog_name}: {e}")
+        # Register Cogs from the cogs directory
+        if os.path.exists("./cogs"):
+            for filename in os.listdir("./cogs"):
+                if filename.endswith(".py") and not filename.startswith("__"):
+                    cog_name = f"cogs.{filename[:-3]}"
+                    try:
+                        await self.load_extension(cog_name)
+                        logger.info(f"Successfully loaded extension: {cog_name}")
+                    except Exception as e:
+                        logger.error(f"Failed to load extension {cog_name}: {e}")
 
-        # Sync application commands to Discord globally
+        # Sync commands to Discord globally
         asyncio.create_task(self.sync_commands_later())
 
     async def sync_commands_later(self):
@@ -57,14 +57,17 @@ async def main():
     token = os.getenv("DISCORD_TOKEN")
     port = int(os.getenv("DASHBOARD_PORT", 10000))
 
-    # Production Rate-Limit Bypass: Injects a proxy into the bot's standard HTTP client session
-    # We use a reliable free public proxy gateway or an alternate proxy endpoint if provided
-    proxy_url = os.getenv("PROXY_URL", "http://95.211.175.167:13151") # Fallback public proxy example
-    
-    # We configure discord.py to use the proxy URL directly when logging in
+    # Pull the proxy configuration string if provided by the environment
+    proxy_url = os.getenv("DISCORD_PROXY_URL")
+    if proxy_url:
+        logger.info(f"Routing Discord traffic through proxy endpoint: {proxy_url}")
+    else:
+        logger.warning("No proxy URL defined. Attempting direct connection to Discord API...")
+
     try:
+        # Pass the proxy explicitly to bot.start() so discord.py handles the tunnel route natively
         await asyncio.gather(
-            bot.start(token, reconnect=True),
+            bot.start(token, reconnect=True, proxy=proxy_url),
             run_dashboard(bot, port)
         )
     except KeyboardInterrupt:
@@ -74,4 +77,5 @@ async def main():
             await bot.close()
 
 if __name__ == "__main__":
+    asyncio.run(main())
     asyncio.run(main())
