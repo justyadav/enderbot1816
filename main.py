@@ -15,25 +15,21 @@ logger = logging.getLogger("Bot.Main")
 load_dotenv()
 
 class ModularBot(commands.Bot):
-    def __init__(self, proxy_url=None):
+    def __init__(self):
         intents = Intents.default()
         intents.message_content = True
         intents.members = True
         intents.voice_states = True
         
-        # Inject the proxy directly into the parent initialization constructor
         super().__init__(
             command_prefix=tuple(), 
             intents=intents, 
-            help_command=None,
-            proxy=proxy_url
+            help_command=None
         )
 
     async def setup_hook(self):
-        # Initialize Database connection
         db_manager.connect()
         
-        # Register Cogs from the cogs directory
         if os.path.exists("./cogs"):
             for filename in os.listdir("./cogs"):
                 if filename.endswith(".py") and not filename.startswith("__"):
@@ -44,7 +40,6 @@ class ModularBot(commands.Bot):
                     except Exception as e:
                         logger.error(f"Failed to load extension {cog_name}: {e}")
 
-        # Sync commands to Discord globally
         asyncio.create_task(self.sync_commands_later())
 
     async def sync_commands_later(self):
@@ -61,15 +56,8 @@ class ModularBot(commands.Bot):
 async def main():
     token = os.getenv("DISCORD_TOKEN")
     port = int(os.getenv("DASHBOARD_PORT", 10000))
-    proxy_url = os.getenv("DISCORD_PROXY_URL")
 
-    if proxy_url:
-        logger.info(f"Initializing bot engine with proxy routing: {proxy_url}")
-    else:
-        logger.warning("No proxy URL defined. Attempting direct connection to Discord API...")
-
-    # Instantiate the bot with the proxy parameter included 
-    bot = ModularBot(proxy_url=proxy_url)
+    bot = ModularBot()
 
     try:
         await asyncio.gather(
