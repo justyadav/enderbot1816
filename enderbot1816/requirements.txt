@@ -1,0 +1,21 @@
+# --- CORE DISCORD GATEWAY RUNTIME ---
+discord.py[voice]==2.3.2
+aiohttp>=3.9.0,<4.0.0
+
+# --- DATA ROUTING AND ASYNC PIPELINES ---
+motor==3.3.1
+pymongo>=4.6.0,<5.0.0
+dnspython>=2.6.0,<3.0.0
+
+# --- WEBSERVER ARCHITECTURE & ENDPOINTS ---
+quart==0.19.5
+flask==3.0.0
+werkzeug==3.0.1
+hypercorn==0.16.0
+
+# --- ENVIRONMENT & SYSTEM SECURITY LAYERS ---
+python-dotenv==1.0.0
+
+# --- ASYNC HIGH-PERFORMANCE C-EXTENSIONS ---
+aiodns>=3.1.1       # Accelerates asynchronous API domain parsing
+cchardet>=2.1.7     # Optimizes network character encoding speeds
