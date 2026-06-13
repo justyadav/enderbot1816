@@ -34,7 +34,7 @@ class EnderBot(commands.Bot):
             "cogs.info",
             "cogs.logging",
             "cogs.moderation",
-            "cogs.tickets"
+            "cogs.gladbyte_ticket"
         ]
 
         for cog in cogs_to_load:
