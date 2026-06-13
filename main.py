@@ -25,7 +25,7 @@ class EnderBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        logger.info("Initializing system background operations...")
+        logger.info("Initializing database connections and extensions...")
 
         # Connection to the MongoDB Atlas cluster
         try:
@@ -40,7 +40,7 @@ class EnderBot(commands.Bot):
             "cogs.automod",
             "cogs.logging",
             "cogs.tickets",
-            "cogs.aitorole"
+            "cogs.autorole"
         ]
 
         for cog in cogs_to_load:
@@ -49,10 +49,6 @@ class EnderBot(commands.Bot):
                 logger.info(f"Extension cog loaded successfully: {cog}")
             except Exception as e:
                 logger.error(f"Failed to load extension {cog}: {e}")
-
-        # Bind web dashboard natively inside bot's execution event loop
-        self.loop.create_task(run_dashboard(self, PORT))
-        logger.info(f"Dashboard thread deployed targeting production port: {PORT}")
 
     async def on_ready(self):
         logger.info(f"🤖 Bot Connection Secured | Logged in as: {self.user.name} ({self.user.id})")
@@ -72,13 +68,17 @@ async def main():
     bot = EnderBot()
     app.bot = bot
 
-    try:
-        await bot.start(TOKEN)
-    except Exception as e:
-        logger.critical(f"Fatal crash encountered during launch sequencing: {e}")
+    # Using an asyncio task group ensures both components initialize simultaneously.
+    # The dashboard will immediately bind to its port, passing Render's health checks.
+    async with asyncio.TaskGroup() as tg:
+        logger.info(f"Deploying dashboard webserver framework targeting port: {PORT}")
+        tg.create_task(run_dashboard(bot, PORT))
+        
+        logger.info("Launching Discord bot client connection gateway...")
+        tg.create_task(bot.start(TOKEN))
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("System process terminated safely.")
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("System processes terminated safely.")
