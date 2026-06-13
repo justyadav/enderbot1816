@@ -46,7 +46,6 @@ class EnderBot(commands.Bot):
             "cogs.admin_utils",
             "cogs.error_handler",
             "cogs.onboard",
-            "cogs.help",
             "cogs.tickets"
         ]
 
