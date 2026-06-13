@@ -8,25 +8,28 @@ logger = logging.getLogger("Bot.Database")
 
 class DatabaseManager:
     def __init__(self):
-        self.mongo_uri = os.getenv("MONGO_URI")
         self.client = None
         self.db = None
 
-    def connect(self):
-        try:
-            # Initialize the AsyncIO Motor Client
-            self.client = AsyncIOMotorClient(self.mongo_uri)
-            # Database name extracted or targeted (defaulting to 'bot_prod')
-            self.db = self.client["bot_prod"]
-            logger.info("Successfully initiated Motor MongoDB connection.")
-        except Exception as e:
-            logger.critical(f"Failed to connect to MongoDB: {e}")
-            raise e
+    async def initialize(self):
+        """Establishes the async connection to the MongoDB Atlas cluster."""
+        mongo_uri = os.getenv("MONGO_URI")
+        if not mongo_uri:
+            logger.critical("MONGO_URI missing from environment configuration!")
+            raise ValueError("MONGO_URI environment variable is not set.")
+        
+        # Initialize the Motor Async Client
+        self.client = AsyncIOMotorClient(mongo_uri)
+        
+        # Automatically extracts the database name from your connection string or defaults to 'EnderBotDB'
+        self.db = self.client.get_default_database(default_database='EnderBotDB')
+        logger.info("MongoDB Async handshake completed successfully.")
 
     def get_collection(self, name: str):
+        """Helper to fetch a specific data collection."""
         if self.db is None:
-            self.connect()
+            raise RuntimeError("DatabaseManager is not initialized! Call initialize() first.")
         return self.db[name]
 
-# Global database manager instance
+# Export a single global instance to import across your project files
 db_manager = DatabaseManager()
