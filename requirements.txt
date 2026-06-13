@@ -1,8 +1,0 @@
-discord.py[voice]>=2.3.2
-quart>=0.19.5
-flask>=3.0.0
-werkzeug>=3.0.0
-motor>=3.3.1
-python-dotenv>=1.0.0
-aiohttp>=3.9.0
-hypercorn>=0.16.0
