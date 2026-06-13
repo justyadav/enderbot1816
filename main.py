@@ -27,13 +27,14 @@ class EnderBot(commands.Bot):
     async def setup_hook(self):
         logger.info("Loading extensions...")
 
-        # Dynamic Extension Cogs registry
-        cogs_to_load = [
-            "cogs.automod",
-            "cogs.logging",
-            "cogs.tickets",
-            "cogs.autorole"
-        ]
+      cogs_to_load = [
+    "cogs.automod",
+    "cogs.autorole",
+    "cogs.info",
+    "cogs.logging",      # <-- Ensure this matches the newly renamed file!
+    "cogs.moderation",
+    "cogs.tickets"
+]
 
         for cog in cogs_to_load:
             try:
