@@ -62,7 +62,7 @@ class EnderBot(commands.Bot):
 
         await self.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="GladByte Panel"))
 
-sync def on_ready(self):
+async def on_ready(self):
         activity = discord.Activity(
             type=discord.ActivityType.watching,
             name="Ender Bot V2.0"
