@@ -39,7 +39,8 @@ class EnderBot(commands.Bot):
         cogs_to_load = [
             "cogs.automod",
             "cogs.logging",
-            "cogs.tickets"
+            "cogs.tickets",
+            "cogs.aitorole"
         ]
 
         for cog in cogs_to_load:
