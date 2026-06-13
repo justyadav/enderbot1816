@@ -1,233 +1,474 @@
 import discord
-from discord import app_commands
 from discord.ext import commands
-from database import db_manager
-import io
+from discord import app_commands
 import asyncio
-from datetime import datetime
+import io
+import json
+import os
 
-class TicketCloseModal(discord.ui.Modal, title="Close Support Ticket"):
+# =========================================================
+# GLOBAL CONSTANTS & HARD LOCKED GUILD BOUNDARY
+# =========================================================
+GUILD_ID = 1340943454934667345
+TRANSCRIPT_CHANNEL_ID = 1503380993023803623
+REASON_LOG_CHANNEL_ID = 1507342675244880012
+
+BANNER_URL = "https://cdn.discordapp.com/attachments/1503380982831513701/1503418351081226250/b4ce5269-498b-41d1-8c2e-b1b02eef76e5.png?ex=6a0322b7&is=6a01d137&hm=bf48e925bd3ba9ba729864234551df4cfb8bc2245b08ec4208a0df5aef1cb4d1&"
+TICKET_IMAGE_URL = "https://cdn.discordapp.com/attachments/1340943454934667345/1340943454934667345/image_449024.jpg?ex=6a02df69&is=6a018de9&hm=9c84f67b5b5dfa40232df6f7097fa311bc7db542c86eb293784bd1db6dfce5d8&"
+SETTINGS_FILE = "ticket_settings_glad.json"
+
+CREATOR_CREDIT = "Made by yaduvanshi1816_"
+
+
+# =========================================================
+# SETTINGS
+# =========================================================
+
+def load_settings():
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[Ticket Error] {e}")
+            return {}
+    return {}
+
+
+def save_settings(data):
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+    except Exception as e:
+        print(f"[Ticket Error] {e}")
+
+
+# =========================================================
+# CLOSE MODAL
+# =========================================================
+
+class GladbyteCloseModal(discord.ui.Modal, title="Close Ticket"):
+
     reason = discord.ui.TextInput(
-        label="Reason for closure", 
-        placeholder="e.g., Issue resolved / User inactive", 
-        required=True, 
-        max_length=200
+        label="Reason",
+        style=discord.TextStyle.long,
+        placeholder="Enter closing reason...",
+        required=True,
+        max_length=400
     )
-
-    def __init__(self, cog, channel):
-        super().__init__()
-        self.cog = cog
-        self.channel = channel
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        await self.cog.process_ticket_closure(interaction, self.channel, self.reason.value)
+
+        channel = interaction.channel
+        guild = interaction.guild
+
+        # =========================================
+        # LOG CHANNEL
+        # =========================================
+        log_channel = guild.get_channel(REASON_LOG_CHANNEL_ID)
+        if log_channel:
+            embed = discord.Embed(
+                title="🔒 Ticket Closed",
+                description=(
+                    f"**Channel:** {channel.name}\n"
+                    f"**Closed By:** {interaction.user.mention}"
+                ),
+                color=discord.Color.red()
+            )
+            embed.add_field(
+                name="Reason",
+                value=self.reason.value,
+                inline=False
+            )
+            embed.set_footer(text=CREATOR_CREDIT)
+            await log_channel.send(embed=embed)
+
+        # =========================================
+        # TRANSCRIPT
+        # =========================================
+        try:
+            transcript = (
+                ":envelope: ---GLADBYTE SUPPORT TRANSCRIPT---:envelope: \n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            )
+
+            async for message in channel.history(limit=None, oldest_first=True):
+                timestamp = message.created_at.strftime("%Y-%m-%d %H:%M")
+                transcript += (
+                    f"[{timestamp}] "
+                    f"{message.author}: {message.content}\n"
+                )
+                if message.attachments:
+                    for att in message.attachments:
+                        transcript += f"Attachment: {att.url}\n"
+
+            file_data = discord.File(
+                io.BytesIO(transcript.encode()),
+                filename=f"{channel.name}.txt"
+            )
+
+            transcript_channel = guild.get_channel(TRANSCRIPT_CHANNEL_ID)
+            if transcript_channel:
+                embed = discord.Embed(
+                    title="📑 Ticket Transcript",
+                    description=(
+                        f"**Channel:** {channel.name}\n"
+                        f"**Closed By:** {interaction.user.mention}"
+                    ),
+                    color=discord.Color.purple()
+                )
+                embed.set_footer(text=CREATOR_CREDIT)
+                await transcript_channel.send(embed=embed, file=file_data)
+
+        except Exception as e:
+            print(f"Transcript Error: {e}")
+
+        # =========================================
+        # DELETE
+        # =========================================
+        await interaction.followup.send("🔒 Deleting ticket in 5 seconds...")
+        await asyncio.sleep(5)
+
+        try:
+            await channel.delete(reason=f"Closed by {interaction.user}")
+        except Exception:
+            pass
 
 
-class TicketControlButtons(discord.ui.View):
-    def __init__(self, cog):
+# =========================================================
+# BUTTONS
+# =========================================================
+
+class GladbyteControls(discord.ui.View):
+
+    def __init__(self):
         super().__init__(timeout=None)
-        self.cog = cog
 
-    @discord.ui.button(label="🔒 Close Ticket", style=discord.ButtonStyle.danger, custom_id="btn_close_ticket")
-    async def close_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
-        settings = await self.cog.config_collection.find_one({"guild_id": interaction.guild_id}) or {}
-        
-        # Check if dashboard requires an official text reason modal popup
-        if settings.get("close_reason_enabled", True):
-            await interaction.response.send_modal(TicketCloseModal(self.cog, interaction.channel))
-        else:
-            await interaction.response.defer()
-            await self.cog.process_ticket_closure(interaction, interaction.channel, "No closure reason specified.")
+    def is_staff(self, member: discord.Member):
+        return (
+            member.guild_permissions.manage_messages
+            or member.guild_permissions.administrator
+        )
 
-    @discord.ui.button(label="🙋 Claim Ticket", style=discord.ButtonStyle.success, custom_id="btn_claim_ticket")
-    async def claim_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.user.guild_permissions.manage_channels:
-            await interaction.response.send_message("❌ Authorized support team access only.", ephemeral=True)
-            return
-            
-        await interaction.response.defer()
-        
-        # Adjust overrides so the claiming staff member has elevated permissions inside this channel
-        await interaction.channel.set_permissions(interaction.user, read_messages=True, send_messages=True, manage_channels=True)
-        
-        # Disable the claim button interaction globally across caches
+    # =====================================================
+    # CLAIM
+    # =====================================================
+    @discord.ui.button(
+        label="Claim Ticket",
+        style=discord.ButtonStyle.success,
+        emoji="🙋",
+        custom_id="glad_persistent_claim"
+    )
+    async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.is_staff(interaction.user):
+            return await interaction.response.send_message("❌ Staff only.", ephemeral=True)
+
         button.disabled = True
         button.label = f"Claimed by {interaction.user.name}"
-        await interaction.message.edit(view=self)
-        
-        await interaction.channel.send(f"💼 This ticket has been claimed by {interaction.user.mention}.")
+        button.style = discord.ButtonStyle.secondary
+
+        await interaction.response.edit_message(view=self)
+
+        embed = discord.Embed(
+            description=f"✅ Ticket claimed by {interaction.user.mention}",
+            color=discord.Color.green()
+        )
+        await interaction.channel.send(embed=embed)
+
+    # =====================================================
+    # TRANSCRIPT
+    # =====================================================
+    @discord.ui.button(
+        label="Transcript",
+        style=discord.ButtonStyle.secondary,
+        emoji="📑",
+        custom_id="glad_persistent_transcript"
+    )
+    async def transcript(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.is_staff(interaction.user):
+            return await interaction.response.send_message("❌ Staff only.", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            content = "GLADBYTE SUPPORT TRANSCRIPT\n\n"
+            async for message in interaction.channel.history(limit=None, oldest_first=True):
+                timestamp = message.created_at.strftime("%Y-%m-%d %H:%M")
+                content += f"[{timestamp}] {message.author}: {message.content}\n"
+
+            file_data = discord.File(
+                io.BytesIO(content.encode()),
+                filename=f"{interaction.channel.name}.txt"
+            )
+
+            log_channel = interaction.guild.get_channel(TRANSCRIPT_CHANNEL_ID)
+            if log_channel:
+                await log_channel.send(
+                    content=f"Transcript from {interaction.channel.name}",
+                    file=file_data
+                )
+
+            await interaction.followup.send("✅ Transcript saved.", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Error:\n```{e}```", ephemeral=True)
+
+    # =====================================================
+    # DELETE
+    # =====================================================
+    @discord.ui.button(
+        label="Delete Ticket",
+        style=discord.ButtonStyle.danger,
+        emoji="🗑️",
+        custom_id="glad_persistent_delete"
+    )
+    async def delete_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.is_staff(interaction.user):
+            return await interaction.response.send_message("❌ Staff only.", ephemeral=True)
+
+        # Bug Fix: Handing modal execution inside view interactions requires direct reference structure
+        await interaction.response.send_modal(GladbyteCloseModal())
 
 
-class DynamicTicketDropdown(discord.ui.Select):
-    def __init__(self, sections, cog):
-        self.cog = cog
-        
-        # 🛡️ AIRTIGHT GUARD 1: Failsafe fallback right inside the constructor loop
-        if not sections or len(sections) == 0:
-            sections = [{"emoji": "📌", "label": "General Support", "desc": "Standard general assistance query lines."}]
-            
+# =========================================================
+# DROPDOWN
+# =========================================================
+
+class GladbyteDropdown(discord.ui.Select):
+
+    def __init__(self):
         options = [
-            discord.SelectOption(label=s["label"], description=s["desc"], emoji=s["emoji"]) 
-            for s in sections
+            discord.SelectOption(label="General Support", emoji="🛰️"),
+            discord.SelectOption(label="Minecraft Support", emoji="🎮"),
+            discord.SelectOption(label="VPS Purchase", emoji="⚡"),
+            discord.SelectOption(label="Minecraft Server Purchase", emoji="🕹️"),
+            discord.SelectOption(label="Partnership Support", emoji="🤝"),
+            discord.SelectOption(label="Any Other", emoji="🛠️")
         ]
-        
         super().__init__(
-            placeholder="🗂️ Select Department...", 
-            min_values=1, 
-            max_values=1, 
-            custom_id="dynamic_ticket_select",
-            options=options
+            placeholder="📥 Select Department",
+            options=options,
+            custom_id="glad_persistent_dropdown"
         )
 
     async def callback(self, interaction: discord.Interaction):
-        selection = self.values[0]
-        guild = interaction.guild
-        user = interaction.user
+        if interaction.guild.id != GUILD_ID:
+            return await interaction.response.send_message("❌ This system is locked to another server.", ephemeral=True)
+
         await interaction.response.defer(ephemeral=True)
+        guild = interaction.guild
 
-        # Restrict standard permissions to hide this text channel from regular server members
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True, read_message_history=True)
-        }
+        # =========================================
+        # LOAD CATEGORY
+        # =========================================
+        settings = load_settings()
+        saved_cat_id = settings.get(str(guild.id))
 
-        settings = await self.cog.config_collection.find_one({"guild_id": guild.id}) or {}
-        category_id = settings.get("ticket_category_id")
-        target_category = guild.get_channel(category_id) if category_id else None
+        if not saved_cat_id:
+            return await interaction.followup.send("❌ Run /setup first.", ephemeral=True)
 
-        channel_name = f"{selection.lower().replace(' ', '-')}-{user.name}"
-        ticket_channel = await guild.create_text_channel(name=channel_name, overwrites=overwrites, category=target_category)
+        category = guild.get_channel(saved_cat_id)
+        if category is None:
+            return await interaction.followup.send("❌ Category deleted. Run /setup again.", ephemeral=True)
 
-        ticket_embed = discord.Embed(
-            title=f"🎫 {selection} Ticket Opened",
-            description=f"Hello {user.mention}, thank you for contacting **GladByte Helpdesk**.\nPlease describe your request. A staff member will be with you shortly.",
-            color=discord.Color.orange()
-        )
-        
-        # Anchor persistent internal buttons right below the initialization greetings card
-        await ticket_channel.send(content=f"{user.mention} | Support Pipeline", embed=ticket_embed, view=TicketControlButtons(self.cog))
-        await interaction.followup.send(f"✅ Ticket deployed! Channel link: {ticket_channel.mention}", ephemeral=True)
+        # =========================================
+        # ONE TICKET CHECK (BY USERNAME)
+        # =========================================
+        clean_name = interaction.user.name.lower().replace(" ", "-")
+        channel_name = f"🎫-ticket-{clean_name}"
+
+        existing = discord.utils.get(guild.text_channels, name=channel_name)
+        if existing:
+            return await interaction.followup.send(f"⚠️ You already have a ticket: {existing.mention}", ephemeral=True)
+
+        # =========================================
+        # CREATE CHANNEL
+        # =========================================
+        try:
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                interaction.user: discord.PermissionOverwrite(
+                    view_channel=True,
+                    send_messages=True,
+                    attach_files=True,
+                    embed_links=True,
+                    read_message_history=True
+                ),
+                guild.me: discord.PermissionOverwrite(
+                    view_channel=True,
+                    send_messages=True,
+                    manage_channels=True,
+                    manage_messages=True,
+                    read_message_history=True
+                )
+            }
+
+            ticket_channel = await guild.create_text_channel(
+                name=channel_name,
+                category=category,
+                overwrites=overwrites
+            )
+
+            await interaction.followup.send(f"✅ Ticket Created: {ticket_channel.mention}", ephemeral=True)
+
+            # Open Embed
+            opened = discord.Embed(
+                title="✅ Ticket Opened",
+                description=f"{interaction.user.mention} your ticket has been created.",
+                color=discord.Color.green()
+            )
+            opened.set_footer(text=CREATOR_CREDIT)
+            await ticket_channel.send(embed=opened)
+
+            # Main Panel Embed
+            embed = discord.Embed(
+                title="🏢 Gladbyte Helpdesk",
+                description=(
+                    f"👋 Welcome {interaction.user.mention}\n\n"
+                    f"🛠️ Department: **{self.values[0]}**\n\n"
+                    f"Please explain your issue below."
+                ),
+                color=discord.Color.purple()
+            )
+            embed.set_thumbnail(url=TICKET_IMAGE_URL)
+            embed.set_footer(text=CREATOR_CREDIT)
+
+            await ticket_channel.send(embed=embed, view=GladbyteControls())
+
+        except Exception as e:
+            await interaction.followup.send(f"❌ Error:\n```{e}```", ephemeral=True)
 
 
-class DynamicTicketView(discord.ui.View):
-    def __init__(self, sections, cog):
+# =========================================================
+# VIEW
+# =========================================================
+
+class GladbyteView(discord.ui.View):
+
+    def __init__(self):
         super().__init__(timeout=None)
-        
-        # 🛡️ AIRTIGHT GUARD 2: Force a fallback array here as well just in case
-        if not sections or len(sections) == 0:
-            sections = [{"emoji": "📌", "label": "General Support", "desc": "Standard general assistance query lines."}]
-            
-        self.add_item(DynamicTicketDropdown(sections, cog))
+        self.add_item(GladbyteDropdown())
 
 
-class Tickets(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+# =========================================================
+# COG
+# =========================================================
+
+class GladbyteTickets(commands.Cog):
+
+    def __init__(self, bot):
         self.bot = bot
-        self.config_collection = db_manager.get_collection("guild_settings")
 
+    def is_staff(self, interaction: discord.Interaction):
+        return (
+            interaction.user.guild_permissions.manage_messages
+            or interaction.user.guild_permissions.administrator
+        )
+
+    # Bug Fix: Persistent view registers inside the on_ready baseline loop
     @commands.Cog.listener()
     async def on_ready(self):
-        # Register view listener persistently to preserve button states when bot reboots
-        self.bot.add_view(TicketControlButtons(self))
+        self.bot.add_view(GladbyteView())
+        self.bot.add_view(GladbyteControls())
 
-    @app_commands.command(name="setup_tickets", description="Spawns the GladByte Helpdesk ticketing panel.")
+    # =====================================================
+    # SETUP PANEL COMMAND
+    # =====================================================
+    @app_commands.command(
+        name="setup",
+        description="Setup Ticket System"
+    )
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
     @app_commands.checks.has_permissions(administrator=True)
-    async def setup_tickets(self, interaction: discord.Interaction):
-        settings = await self.config_collection.find_one({"guild_id": interaction.guild_id}) or {}
-        
-        # 🛡️ AIRTIGHT GUARD 3: Fallback safety net inside the command logic
-        ticket_sections = settings.get("ticket_sections")
-        if not ticket_sections or len(ticket_sections) == 0:
-            ticket_sections = [
-                {"emoji": "📌", "label": "General Support", "desc": "Standard general assistance query lines."}
-            ]
-            
-        banner_url = settings.get("ticket_banner_url")
+    async def setup_panel(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel,
+        category: discord.CategoryChannel
+    ):
+        if interaction.guild.id != GUILD_ID:
+            return await interaction.response.send_message("❌ Wrong server.", ephemeral=True)
 
-        desc_lines = "—————————————————————\n\n"
-        for s in ticket_sections:
-            desc_lines += f"{s['emoji']} **{s['label']}**\n{s['desc']}\n\n"
-        desc_lines += "—————————————————————"
+        await interaction.response.defer(ephemeral=True)
+
+        settings = load_settings()
+        settings[str(interaction.guild.id)] = category.id
+        save_settings(settings)
 
         embed = discord.Embed(
-            title="—— GLADBYTE HELPDESK ——", 
-            description=desc_lines, 
-            color=discord.Color.from_rgb(114, 137, 218)
+            title=" ━━━ GLADBYTE HELPDESK ━━━ ",
+            description=(
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "🛰️ **General Support**\n"
+                "For general questions or server-related assistance.\n\n"
+                "🎮 **Minecraft Support**\n"
+                "Help with gameplay issues, bugs, or plugins.\n\n"
+                "⚡ **VPS Purchase**\n"
+                "Know about our Virtual Private Servers.\n\n"
+                "🕹️ **Minecraft Server Purchase**\n"
+                "Create a Ticket here to Purchase Minecraft Servers.\n\n"
+                "🤝 **Partnership Support**\n"
+                "Questions about partnerships or collaborations.\n\n"
+                "🛠️ **Any Other**\n"
+                "Create a Ticket Under this Category for Any Other Query.\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            ),
+            color=discord.Color.purple()
         )
-        if banner_url: 
-            embed.set_image(url=banner_url)
-        embed.set_footer(text="Made by yaduvanshi1816_")
+        embed.set_image(url=BANNER_URL)
+        embed.set_footer(text=CREATOR_CREDIT)
 
-        await interaction.response.send_message(embed=embed, view=DynamicTicketView(ticket_sections, self))
+        await channel.send(embed=embed, view=GladbyteView())
+        await interaction.followup.send("✅ Ticket system setup complete.", ephemeral=True)
 
-    async def process_ticket_closure(self, interaction, channel, reason):
-        settings = await self.config_collection.find_one({"guild_id": channel.guild.id}) or {}
-        log_channel_id = settings.get("logging_channel_id")
+    # =====================================================
+    # ADD USER COMMAND
+    # =====================================================
+    @app_commands.command(
+        name="gadd",
+        description="Add user to ticket"
+    )
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def add_user(self, interaction: discord.Interaction, member: discord.Member):
+        if not self.is_staff(interaction):
+            return await interaction.response.send_message("❌ Staff only.", ephemeral=True)
 
-        await channel.send("🔒 *Archiving history and generating logs... Channel termination pending.*")
+        # Bug Fix: Adjusted prefix validation structure to look for the emoji string prefix natively
+        if not interaction.channel.name.startswith("🎫-ticket-"):
+            return await interaction.response.send_message("❌ Not a valid ticket channel.", ephemeral=True)
 
-        # Compile and generate a text transcript file if allowed by dashboard configuration
-        transcript_file = None
-        if settings.get("transcript_enabled", True):
-            log_text = f"=== GLADBYTE TICKET TRANSCRIPT #{channel.name} ===\n"
-            log_text += f"Closed By: {interaction.user.name} ({interaction.user.id})\n"
-            log_text += f"Reason: {reason}\n"
-            log_text += f"Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
-            log_text += "====================================================\n\n"
-            
-            async for msg in channel.history(limit=500, oldest_first=True):
-                log_text += f"[{msg.created_at.strftime('%Y-%m-%d %H:%M')}] {msg.author.name}: {msg.content}\n"
-                if msg.attachments:
-                    for att in msg.attachments:
-                        log_text += f" -> Attachment URL: {att.url}\n"
-                        
-            buffer = io.BytesIO(log_text.encode('utf-8'))
-            transcript_file = discord.File(fp=buffer, filename=f"transcript-{channel.name}.txt")
+        await interaction.channel.set_permissions(
+            member,
+            view_channel=True,
+            send_messages=True,
+            attach_files=True,
+            embed_links=True
+        )
+        await interaction.response.send_message(f"✅ Added {member.mention} to the ticket.")
 
-        # Forward moderation details accompanied with the compiled transcript directly to logs channel
-        if log_channel_id:
-            log_channel = channel.guild.get_channel(log_channel_id)
-            if log_channel:
-                log_embed = discord.Embed(
-                    title="🎫 Ticket Concluded & Logged", 
-                    color=discord.Color.red(), 
-                    timestamp=datetime.utcnow()
-                )
-                log_embed.add_field(name="Target Channel", value=f"#{channel.name}", inline=True)
-                log_embed.add_field(name="Closed By", value=interaction.user.mention, inline=True)
-                log_embed.add_field(name="Reason Notes", value=reason, inline=False)
-                try:
-                    if transcript_file:
-                        await log_channel.send(embed=log_embed, file=transcript_file)
-                    else:
-                        await log_channel.send(embed=log_embed)
-                except: 
-                    pass
+    # =====================================================
+    # REMOVE USER COMMAND
+    # =====================================================
+    @app_commands.command(
+        name="gremove",
+        description="Remove user from ticket"
+    )
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    async def remove_user(self, interaction: discord.Interaction, member: discord.Member):
+        if not self.is_staff(interaction):
+            return await interaction.response.send_message("❌ Staff only.", ephemeral=True)
 
-        # Conclude operations and delete the text channel
-        await asyncio.sleep(3)
-        await channel.delete(reason=f"Ticket closed by {interaction.user.name}: {reason}")
+        # Bug Fix: Adjusted prefix validation structure to look for the emoji string prefix natively
+        if not interaction.channel.name.startswith("🎫-ticket-"):
+            return await interaction.response.send_message("❌ Not a valid ticket channel.", ephemeral=True)
 
-    # Slash Command: /ticket_add <user>
-    @app_commands.command(name="ticket_add", description="Adds a user to this ticket channel.")
-    @app_commands.describe(member="The user you want to add to this ticket channel.")
-    async def ticket_add(self, interaction: discord.Interaction, member: discord.Member):
-        if not interaction.user.guild_permissions.manage_channels:
-            await interaction.response.send_message("❌ Missing staff permission rules.", ephemeral=True)
-            return
-        await interaction.channel.set_permissions(member, read_messages=True, send_messages=True, attach_files=True)
-        await interaction.response.send_message(f"✅ Granted ticket access mapping view context to: {member.mention}")
-
-    # Slash Command: /ticket_remove <user>
-    @app_commands.command(name="ticket_remove", description="Removes a user from this ticket channel.")
-    @app_commands.describe(member="The user you want to remove from this ticket channel.")
-    async def ticket_remove(self, interaction: discord.Interaction, member: discord.Member):
-        if not interaction.user.guild_permissions.manage_channels:
-            await interaction.response.send_message("❌ Missing staff permission rules.", ephemeral=True)
-            return
         await interaction.channel.set_permissions(member, overwrite=None)
-        await interaction.response.send_message(f"❌ Revoked ticket access mapping view context from: {member.mention}")
+        await interaction.response.send_message(f"✅ Removed {member.mention} from the ticket.")
 
-async def setup(bot: commands.Bot):
-    await bot.add_cog(Tickets(bot))
+
+# =========================================================
+# REGISTRATION COG INITIALIZER
+# =========================================================
+
+async def setup(bot):
+    await bot.add_cog(GladbyteTickets(bot))
