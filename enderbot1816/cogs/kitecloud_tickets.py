@@ -477,4 +477,4 @@ class KitecloudTickets(commands.Cog):
 # =========================================================
 
 async def setup(bot):
-    await bot.add_cog(KitecloudTickets(bot))
+await bot.add_cog(KitecloudTickets(bot))
