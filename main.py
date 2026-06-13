@@ -62,6 +62,15 @@ class EnderBot(commands.Bot):
 
         await self.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="GladByte Panel"))
 
+sync def on_ready(self):
+        activity = discord.Activity(
+            type=discord.ActivityType.watching,
+            name="Ender Bot V2.0"
+        )
+        await self.change_presence(
+            status=discord.Status.do_not_disturb,
+            activity=activity
+        )
 async def main():
     if not TOKEN:
         logger.critical("Initialization aborted: 'DISCORD_TOKEN' environment key missing.")
