@@ -25,15 +25,7 @@ class EnderBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        logger.info("Initializing database connections and extensions...")
-
-        # Connection to the MongoDB Atlas cluster
-        try:
-            await db_manager.initialize() 
-            logger.info("Successfully established connection to MongoDB Cluster.")
-        except Exception as e:
-            logger.critical(f"Database handshake crash: {e}")
-            return
+        logger.info("Loading extensions...")
 
         # Dynamic Extension Cogs registry
         cogs_to_load = [
@@ -65,11 +57,19 @@ async def main():
         logger.critical("Initialization aborted: 'DISCORD_TOKEN' environment key missing.")
         return
 
+    # 1. CRISIS PREVENTER: Run database handshake FIRST and block everything until it succeeds.
+    try:
+        logger.info("Establishing connection to MongoDB Cluster...")
+        await db_manager.initialize() 
+        logger.info("Successfully established connection to MongoDB Cluster.")
+    except Exception as e:
+        logger.critical(f"Database handshake crash: {e}")
+        return
+
     bot = EnderBot()
     app.bot = bot
 
-    # Using an asyncio task group ensures both components initialize simultaneously.
-    # The dashboard will immediately bind to its port, passing Render's health checks.
+    # 2. Now that the database is guaranteed to be online, launch web traffic and bot socket gateways safely
     async with asyncio.TaskGroup() as tg:
         logger.info(f"Deploying dashboard webserver framework targeting port: {PORT}")
         tg.create_task(run_dashboard(bot, PORT))
