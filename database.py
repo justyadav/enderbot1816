@@ -21,8 +21,14 @@ class DatabaseManager:
         # Initialize the Motor Async Client
         self.client = AsyncIOMotorClient(mongo_uri)
         
-        # Automatically extracts the database name from your connection string or defaults to 'EnderBotDB'
-        self.db = self.client.get_default_database(default_database='EnderBotDB')
+        try:
+            # Try to get the database defined directly in your connection URI string
+            self.db = self.client.get_default_database()
+        except ConfigurationError:
+            # Fallback if your URI string doesn't end with a database name
+            logger.warning("No default database found in MONGO_URI. Falling back to 'EnderBotDB'.")
+            self.db = self.client["EnderBotDB"]
+            
         logger.info("MongoDB Async handshake completed successfully.")
 
     def get_collection(self, name: str):
