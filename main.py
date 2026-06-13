@@ -9,6 +9,10 @@ from dotenv import load_dotenv
 from database import db_manager
 from dashboard import run_dashboard, app
 
+# CRITICAL FIX: Import the interactive View classes for persistent registry
+from cogs.tickets import TicketLauncher, TicketControls
+from cogs.help import HelpView
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Bot.Main")
 
@@ -27,7 +31,7 @@ class EnderBot(commands.Bot):
     async def setup_hook(self):
         logger.info("Loading extensions...")
 
-      # Dynamic Extension Cogs registry
+        # Dynamic Extension Cogs registry
         cogs_to_load = [
             "cogs.automod",
             "cogs.autorole",
@@ -43,7 +47,7 @@ class EnderBot(commands.Bot):
             "cogs.error_handler",
             "cogs.onboard",
             "cogs.help",
-            "cogs.tickets" # <-- Added your new public help menu matrix!
+            "cogs.tickets"
         ]
 
         for cog in cogs_to_load:
@@ -53,17 +57,25 @@ class EnderBot(commands.Bot):
             except Exception as e:
                 logger.error(f"Failed to load extension {cog}: {e}")
 
+        # PERSISTENT CACHE REGISTRY: Tells Discord to keep listening to these component IDs across restarts
+        try:
+            self.add_view(TicketLauncher())
+            self.add_view(TicketControls())
+            self.add_view(HelpView(self))  # Registers the /help interactive dropdown view
+            logger.info("🔗 Persistent interaction view instances cached successfully.")
+        except Exception as e:
+            logger.error(f"Failed to register persistent UI views: {e}")
+
     async def on_ready(self):
         logger.info(f"🤖 Bot Connection Secured | Logged in as: {self.user.name} ({self.user.id})")
+        
         try:
             synced = await self.tree.sync()
             logger.info(f"Successfully synced {len(synced)} application slash commands globally.")
         except Exception as e:
             logger.error(f"Failed to sync slash commands: {e}")
 
-        await self.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="GladByte Panel"))
-
-async def on_ready(self):
+        # Merged and optimized status display parameters
         activity = discord.Activity(
             type=discord.ActivityType.watching,
             name="Ender Bot V2.0"
@@ -72,6 +84,8 @@ async def on_ready(self):
             status=discord.Status.do_not_disturb,
             activity=activity
         )
+
+
 async def main():
     if not TOKEN:
         logger.critical("Initialization aborted: 'DISCORD_TOKEN' environment key missing.")
@@ -96,6 +110,7 @@ async def main():
         
         logger.info("Launching Discord bot client connection gateway...")
         tg.create_task(bot.start(TOKEN))
+
 
 if __name__ == "__main__":
     try:
