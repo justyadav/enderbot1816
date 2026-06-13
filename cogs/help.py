@@ -1,40 +1,152 @@
 import discord
-from discord.ext import commands
 from discord import app_commands
+from discord.ext import commands
 
 # --- SYSTEM BRANDING CONSTANTS ---
 BOT_VERSION = "Ender Bot v2.0"
 CREATOR_CREDIT = "System Automation Engine"
 BRANDED_FOOTER = f"{BOT_VERSION} • {CREATOR_CREDIT} | Made by yaduvanshi1816_"
-BANNER_URL = "https://media.discordapp.net/attachments/1503357008722530377/1505483556959293628/11.png"
 
-COLOR_DARK = discord.Color.from_rgb(34, 36, 41)
+COLOR_MAIN_PANEL = discord.Color.from_rgb(22, 25, 32)      # Deep Cyber Charcoal
+COLOR_ACTIVE_BLUE = discord.Color.from_rgb(168, 85, 247)   # Ender Purple Accent
 
 
 class HelpDropdown(discord.ui.Select):
-    def __init__(self):
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
         options = [
-            discord.SelectOption(label="System Overview", description="Ender Bot v2.0 specifications & general instructions.", emoji="🤖", value="overview"),
-            discord.SelectOption(label="Public Utilities", description="Everyday commands available to all users.", emoji="⚙️", value="utility"),
-            discord.SelectOption(label="Support Desk Help", description="How to initialize private assistance channels.", emoji="📂", value="support")
+            discord.SelectOption(
+                label="Mainframe Overview", 
+                description="View system status, version modules, and operational load.", 
+                emoji="🛰️", 
+                value="overview"
+            ),
+            discord.SelectOption(
+                label="Ticket Management", 
+                description="Public operational commands for controlling active support lines.", 
+                emoji="📥", 
+                value="tickets"
+            ),
+            discord.SelectOption(
+                label="System Security", 
+                description="Overview of integrated security protocols and real-time filters.", 
+                emoji="🛡️", 
+                value="security"
+            )
         ]
         super().__init__(
-            placeholder="📚 Select a directory to view commands...",
+            placeholder="🛰️ Navigate the core database modules...",
             min_values=1,
             max_values=1,
-            custom_id="ender_help_dropdown",
+            custom_id="ender_help_select_menu",
             options=options
         )
 
     async def callback(self, interaction: discord.Interaction):
-        selection = self.values[0]
+        value = self.values[0]
         
-        # 1. OVERVIEW SCREEN
-        if selection == "overview":
+        if value == "overview":
             embed = discord.Embed(
-                title=f"🤖 {BOT_VERSION} Mainframe Help Menu",
+                title="✦ ━━━━━━━ Mainframe Diagnostics ━━━━━━━ ✦",
                 description=(
-                    f"Welcome to the user operations manual for **{BOT_VERSION}**.\n"
+                    f"Welcome to the **{BOT_VERSION}** Central Command Hub.\n"
+                    f"This environment links directly to your web control panel interface.\n\n"
+                    f"Use the drop-down selector matrix below to query active operational files."
+                ),
+                color=COLOR_ACTIVE_BLUE
+            )
+            embed.add_field(name="🌐 Network Node", value="`Render Cloud Platform`", inline=True)
+            embed.add_field(name="⚡ Gateway Latency", value=f"`{round(self.bot.latency * 1000)}ms`", inline=True)
+            embed.add_field(name="🔒 Core Security", value="`AES-Encrypted Streams`", inline=True)
+            embed.set_footer(text=BRANDED_FOOTER)
+            
+        elif value == "tickets":
+            embed = discord.Embed(
+                title="📥 Module: Support Channel Controllers",
+                description="Publicly exposed slash commands for monitoring and routing customer operations threads:",
+                color=COLOR_ACTIVE_BLUE
+            )
+            embed.add_field(
+                name="`/ticket_add` [member]", 
+                value="`└─` Grants a secure user permission profile access inside an active operational room.", 
+                inline=False
+            )
+            embed.add_field(
+                name="`/ticket_remove` [member]", 
+                value="`└─` Drops a user connection completely from the local thread array.", 
+                inline=False
+            )
+            embed.add_field(
+                name="`/ticket_rename` [name]", 
+                value="`└─` Modifies the metadata textual label trailing index string safely.", 
+                inline=False
+            )
+            embed.set_footer(text=f"Ticket Controls Module | {BRANDED_FOOTER}")
+            
+        elif value == "security":
+            embed = discord.Embed(
+                title="🛡️ Module: Integrated Automation Firewalls",
+                description="Core automated modules configured directly via your web dashboard platform:",
+                color=COLOR_ACTIVE_BLUE
+            )
+            embed.add_field(
+                name="🔒 AutoMod Filters", 
+                value="`└─ Status: Active` • Blocks custom lexicon spam strings and automated invite tracking objects.", 
+                inline=False
+            )
+            embed.add_field(
+                name="👥 Automated Clearance Roles", 
+                value="`└─ Status: Active` • Automatically injects background structural access verification metrics to new arrivals.", 
+                inline=False
+            )
+            embed.add_field(
+                name="📝 Secure Incident Logging", 
+                value="`└─ Status: Connected` • Forwards deep transcript logs directly onto designated cloud channels.", 
+                inline=False
+            )
+            embed.set_footer(text=f"Security Cluster Framework | {BRANDED_FOOTER}")
+
+        if interaction.guild and interaction.guild.icon:
+            embed.set_thumbnail(url=interaction.guild.icon.url)
+            
+        await interaction.response.edit_message(embed=embed, view=self.view)
+
+
+class HelpLauncher(discord.ui.View):
+    def __init__(self, bot: commands.Bot):
+        super().__init__(timeout=180)
+        self.add_item(HelpDropdown(bot))
+
+
+class HelpCommand(commands.Cog):
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+
+    @app_commands.command(name="help", description="Queries the central control interface matrix directory")
+    async def help_cmd(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="✦ ━━━━━━━ Mainframe Diagnostics ━━━━━━━ ✦",
+            description=(
+                f"Welcome to the **{BOT_VERSION}** Central Command Hub.\n"
+                f"This environment links directly to your web control panel interface.\n\n"
+                f"Use the drop-down selector matrix below to query active operational files."
+            ),
+            color=COLOR_ACTIVE_BLUE
+        )
+        embed.add_field(name="🌐 Network Node", value="`Render Cloud Platform`", inline=True)
+        embed.add_field(name="⚡ Gateway Latency", value=f"`{round(self.bot.latency * 1000)}ms`", inline=True)
+        embed.add_field(name="🔒 Core Security", value="`AES-Encrypted Streams`", inline=True)
+        
+        if interaction.guild and interaction.guild.icon:
+            embed.set_thumbnail(url=interaction.guild.icon.url)
+            
+        embed.set_footer(text=BRANDED_FOOTER)
+        
+        await interaction.response.send_message(embed=embed, view=HelpLauncher(self.bot))
+
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(HelpCommand(bot))                    f"Welcome to the user operations manual for **{BOT_VERSION}**.\n"
                     f"This bot features modular high-performance systems optimized for community scaling.\n\n"
                     f"Use the selection dropdown menu below to navigate through the available instruction sets."
                 ),
