@@ -62,15 +62,22 @@ class TicketControlButtons(discord.ui.View):
 class DynamicTicketDropdown(discord.ui.Select):
     def __init__(self, sections, cog):
         self.cog = cog
+        
+        # 🛡️ AIRTIGHT GUARD 1: Failsafe fallback right inside the constructor loop
+        if not sections or len(sections) == 0:
+            sections = [{"emoji": "📌", "label": "General Support", "desc": "Standard general assistance query lines."}]
+            
         options = [
             discord.SelectOption(label=s["label"], description=s["desc"], emoji=s["emoji"]) 
             for s in sections
         ]
+        
         super().__init__(
             placeholder="🗂️ Select Department...", 
             min_values=1, 
             max_values=1, 
-            custom_id="dynamic_ticket_select"
+            custom_id="dynamic_ticket_select",
+            options=options
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -106,6 +113,11 @@ class DynamicTicketDropdown(discord.ui.Select):
 class DynamicTicketView(discord.ui.View):
     def __init__(self, sections, cog):
         super().__init__(timeout=None)
+        
+        # 🛡️ AIRTIGHT GUARD 2: Force a fallback array here as well just in case
+        if not sections or len(sections) == 0:
+            sections = [{"emoji": "📌", "label": "General Support", "desc": "Standard general assistance query lines."}]
+            
         self.add_item(DynamicTicketDropdown(sections, cog))
 
 
@@ -124,7 +136,7 @@ class Tickets(commands.Cog):
     async def setup_tickets(self, interaction: discord.Interaction):
         settings = await self.config_collection.find_one({"guild_id": interaction.guild_id}) or {}
         
-        # FAILSAFE GUARD: Force-populate custom menu fallback array to eliminate 400 Bad Request API crashes
+        # 🛡️ AIRTIGHT GUARD 3: Fallback safety net inside the command logic
         ticket_sections = settings.get("ticket_sections")
         if not ticket_sections or len(ticket_sections) == 0:
             ticket_sections = [
@@ -152,70 +164,3 @@ class Tickets(commands.Cog):
     async def process_ticket_closure(self, interaction, channel, reason):
         settings = await self.config_collection.find_one({"guild_id": channel.guild.id}) or {}
         log_channel_id = settings.get("logging_channel_id")
-
-        await channel.send("🔒 *Archiving history and generating logs... Channel termination pending.*")
-
-        # Compile and generate a text transcript file if allowed by dashboard configuration
-        transcript_file = None
-        if settings.get("transcript_enabled", True):
-            log_text = f"=== GLADBYTE TICKET TRANSCRIPT #{channel.name} ===\n"
-            log_text += f"Closed By: {interaction.user.name} ({interaction.user.id})\n"
-            log_text += f"Reason: {reason}\n"
-            log_text += f"Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
-            log_text += "====================================================\n\n"
-            
-            async for msg in channel.history(limit=500, oldest_first=True):
-                log_text += f"[{msg.created_at.strftime('%Y-%m-%d %H:%M')}] {msg.author.name}: {msg.content}\n"
-                if msg.attachments:
-                    for att in msg.attachments:
-                        log_text += f" -> Attachment URL: {att.url}\n"
-                        
-            buffer = io.BytesIO(log_text.encode('utf-8'))
-            transcript_file = discord.File(fp=buffer, filename=f"transcript-{channel.name}.txt")
-
-        # Forward moderation details accompanied with the compiled transcript directly to logs channel
-        if log_channel_id:
-            log_channel = channel.guild.get_channel(log_channel_id)
-            if log_channel:
-                log_embed = discord.Embed(
-                    title="🎫 Ticket Concluded & Logged", 
-                    color=discord.Color.red(), 
-                    timestamp=datetime.utcnow()
-                )
-                log_embed.add_field(name="Target Channel", value=f"#{channel.name}", inline=True)
-                log_embed.add_field(name="Closed By", value=interaction.user.mention, inline=True)
-                log_embed.add_field(name="Reason Notes", value=reason, inline=False)
-                try:
-                    if transcript_file:
-                        await log_channel.send(embed=log_embed, file=transcript_file)
-                    else:
-                        await log_channel.send(embed=log_embed)
-                except: 
-                    pass
-
-        # Conclude operations and delete the text channel
-        await asyncio.sleep(3)
-        await channel.delete(reason=f"Ticket closed by {interaction.user.name}: {reason}")
-
-    # Slash Command: /ticket_add <user>
-    @app_commands.command(name="ticket_add", description="Adds a user to this ticket channel.")
-    @app_commands.describe(member="The user you want to add to this ticket channel.")
-    async def ticket_add(self, interaction: discord.Interaction, member: discord.Member):
-        if not interaction.user.guild_permissions.manage_channels:
-            await interaction.response.send_message("❌ Missing staff permission rules.", ephemeral=True)
-            return
-        await interaction.channel.set_permissions(member, read_messages=True, send_messages=True, attach_files=True)
-        await interaction.response.send_message(f"✅ Granted ticket access mapping view context to: {member.mention}")
-
-    # Slash Command: /ticket_remove <user>
-    @app_commands.command(name="ticket_remove", description="Removes a user from this ticket channel.")
-    @app_commands.describe(member="The user you want to remove from this ticket channel.")
-    async def ticket_remove(self, interaction: discord.Interaction, member: discord.Member):
-        if not interaction.user.guild_permissions.manage_channels:
-            await interaction.response.send_message("❌ Missing staff permission rules.", ephemeral=True)
-            return
-        await interaction.channel.set_permissions(member, overwrite=None)
-        await interaction.response.send_message(f"❌ Revoked ticket access mapping view context from: {member.mention}")
-
-async def setup(bot: commands.Bot):
-    await bot.add_cog(Tickets(bot))
