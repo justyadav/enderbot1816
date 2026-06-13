@@ -154,11 +154,6 @@ async def manage_server(guild_id):
     banned_words_list = settings.get("banned_words", ["scam", "nitro-free"])
     banned_words_text = "\n".join(banned_words_list)
 
-    ticket_sections = settings.get("ticket_sections", [
-        {"emoji": "📌", "label": "General Support", "desc": "Standard general assistance query lines."}
-    ])
-    sections_text = "\n".join([f"{s['emoji']} | {s['label']} | {s['desc']}" for s in ticket_sections])
-
     return f"""
     <html>
         <head>
@@ -227,11 +222,6 @@ async def manage_server(guild_id):
                         <label>🚫 AutoMod Term Filter List (One string per line)</label>
                         <textarea name="banned_words_raw" rows="4" class="input-field" style="resize: vertical;" placeholder="scam&#10;exploit">{banned_words_text}</textarea>
                     </div>
-                    <div class="input-group">
-                        <label>🗂️ Ticket Structural Departments (Emoji | Heading Label | Description)</label>
-                        <textarea name="ticket_sections_raw" rows="4" class="input-field" style="resize: vertical; font-family: monospace;" placeholder="📌 | Billing Support | Payment tasks processing.">{sections_text}</textarea>
-                        <div class="subtext">Separate sections using the strict vertical pipelining string style.</div>
-                    </div>
 
                     <button type="submit" style="background:#5865F2;color:white;border:none;padding:15px;font-weight:bold;border-radius:6px;cursor:pointer;width:100%;font-size:16px;box-shadow: 0 4px 12px rgba(88, 101, 242, 0.2); transition: background 0.2s;">Save Operational Configurations</button>
                 </form>
@@ -262,15 +252,6 @@ async def update_server_settings(guild_id):
     raw_words = form.get("banned_words_raw", "").strip()
     parsed_words = [w.strip().lower() for w in raw_words.split("\n") if w.strip()]
 
-    raw_sections = form.get("ticket_sections_raw", "").strip()
-    parsed_sections = []
-    if raw_sections:
-        for line in raw_sections.split("\n"):
-            if "|" in line:
-                parts = [p.strip() for p in line.split("|")]
-                if len(parts) == 3:
-                    parsed_sections.append({"emoji": parts[0], "label": parts[1], "desc": parts[2]})
-
     config_collection = db_manager.get_collection("guild_settings")
     await config_collection.update_one(
         {"guild_id": guild_id},
@@ -282,8 +263,7 @@ async def update_server_settings(guild_id):
             "logging_channel_id": logging_channel_id,
             "ticket_category_id": ticket_category_id,
             "ticket_banner_url": ticket_banner,
-            "banned_words": parsed_words,
-            "ticket_sections": parsed_sections
+            "banned_words": parsed_words
         }},
         upsert=True
     )
