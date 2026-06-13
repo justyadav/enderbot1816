@@ -27,14 +27,22 @@ class EnderBot(commands.Bot):
     async def setup_hook(self):
         logger.info("Loading extensions...")
 
-        # Dynamic Extension Cogs registry
+      # Dynamic Extension Cogs registry
         cogs_to_load = [
             "cogs.automod",
             "cogs.autorole",
             "cogs.info",
             "cogs.logging",
             "cogs.moderation",
-            "cogs.gladbyte_ticket"
+            "cogs.gladbyte_ticket",
+            "cogs.kitecloud_tickets",
+            "cogs.botinfo",
+            "cogs.invite",
+            "cogs.dashboard",
+            "cogs.admin_utils",
+            "cogs.error_handler",
+            "cogs.onboard",
+            "cogs.help"  # <-- Added your new public help menu matrix!
         ]
 
         for cog in cogs_to_load:
