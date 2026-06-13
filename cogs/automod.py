@@ -12,22 +12,23 @@ class AutoMod(commands.Cog):
         if message.author.bot or not message.guild:
             return
 
-        # 1. Fetch live toggle status from database
-        settings = await self.config_collection.find_one({"guild_id": message.guild.id}) or {}
-        is_automod_on = settings.get("automod_enabled", True) # Default to true if not set
-
-        # 2. If it's turned off on the dashboard, abort!
-        if not is_automod_on:
+        # Check if the user has administrator permissions to bypass the system
+        if message.author.guild_permissions.administrator:
             return
 
-        # Run filtering checks if turned on
-        banned_words = ["scam", "nitro-free", "malware"]
-        if any(word in message.content.lower() for word in banned_words):
+        settings = await self.config_collection.find_one({"guild_id": message.guild.id}) or {}
+        if not settings.get("automod_enabled", True):
+            return
+
+        banned_words = settings.get("banned_words", ["scam", "nitro-free"])
+        message_content = message.content.lower()
+
+        if any(word in message_content for word in banned_words):
             try:
                 await message.delete()
-                await message.channel.send(f"⚠️ {message.author.mention}, bad words are restricted here.", delete_after=5)
+                await message.channel.send(f"⚠️ {message.author.mention}, that word is restricted in this server.", delete_after=5)
             except discord.Forbidden:
-                pass
+                pass  
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(AutoMod(bot))
