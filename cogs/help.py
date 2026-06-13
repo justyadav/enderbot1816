@@ -2,15 +2,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-# --- SYSTEM BRANDING CONSTANTS ---
-BOT_VERSION = "Ender Bot v2.0"
+# --- SYSTEM PALETTE ---
+COLOR_PRIMARY = discord.Color.blurple()
+COLOR_DARK = discord.Color.from_rgb(34, 36, 41)
 CREATOR_CREDIT = "System Automation Engine"
-BRANDED_FOOTER = f"{BOT_VERSION} • {CREATOR_CREDIT} | Made by yaduvanshi1816_"
-
-# --- REUSABLE HIGH-CONTRAST PALETTE ---
-COLOR_MAIN_PANEL = discord.Color.from_rgb(47, 49, 54)     # Sleek Obsidian Grey
-COLOR_ACTIVE_BLUE = discord.Color.from_rgb(114, 137, 218) # Discord Blurple Accent
-COLOR_CONFIRM_GREEN = discord.Color.from_rgb(67, 181, 129) # Safe Mint Emerald
 
 
 # --- HELP CATEGORY DROPDOWN ---
@@ -18,96 +13,106 @@ class HelpDropdown(discord.ui.Select):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         
+        # Define the categories matching your public cogs
         options = [
             discord.SelectOption(label="Utility Module", description="Core metrics, ping, uptime, and server statistics.", emoji="⚙️", value="utility"),
             discord.SelectOption(label="Ticket System", description="Commands to manage public ticket rooms and channels.", emoji="🎫", value="tickets"),
             discord.SelectOption(label="Automation Tools", description="Interactive polls, secure calculator, and reminders.", emoji="🛠️", value="tools"),
             discord.SelectOption(label="Support Hub", description="Official invitations and routing system help.", emoji="🆘", value="support")
         ]
-        super().__init__(
-            placeholder="📂 Choose a command category to display...", 
-            min_values=1, 
-            max_values=1, 
-            custom_id="help_select_menu", 
-            options=options
-        )
+        super().__init__(placeholder="📂 Choose a command category...", min_values=1, max_values=1, custom_id="help_select_menu", options=options)
 
     async def callback(self, interaction: discord.Interaction):
         selection = self.values[0]
-        embed = discord.Embed(color=COLOR_ACTIVE_BLUE, timestamp=discord.utils.utcnow())
-        embed.set_footer(text=BRANDED_FOOTER)
+        embed = discord.Embed(color=COLOR_PRIMARY, timestamp=discord.utils.utcnow())
+        embed.set_footer(text=f"Requested by {interaction.user.display_name} • {CREATOR_CREDIT}")
+
+        # Map your select dropdown values directly to your Cog class names
+        cog_mapping = {
+            "utility": ("Utility", "⚙️ General Utility Commands"),
+            "tickets": ("Tickets", "🎫 Public Ticket Controls"),
+            "tools": ("Tools", "🛠️ Advanced Tool Engines"),
+            "support": ("Support", "🆘 Support & Routing")
+        }
         
-        if interaction.guild and interaction.guild.icon:
-            embed.set_thumbnail(url=interaction.guild.icon.url)
+        cog_name, title = cog_mapping.get(selection, (None, None))
+        cog = self.bot.get_cog(cog_name)
 
-        if selection == "utility":
-            embed.title = "⚙️ Module: Utility Arrays"
-            embed.description = "Essential systemic check tools for measuring runtime stability:"
-            embed.add_field(name="`/ping`", value="`└─` Calculates system gateway ping and WebSocket communication delays.", inline=False)
-            embed.add_field(name="`/stats`", value="`└─` Compiles local host architecture info, memory footprints, and guild counts.", inline=False)
-            embed.add_field(name="`/uptime`", value="`└─` Checks elapsed intervals since the last hard process deployment.", inline=False)
+        embed.title = title
+        
+        # fallback manual commands array showoff if a specific cog hasn't fully registered yet on startup
+        if not cog:
+            embed.description = f"Here are the active, public application commands available inside **{cog_name or selection.capitalize()}**:\n\n"
+            if selection == "tickets":
+                embed.add_field(name="/ticket_setup", value="└ Deploys the highly aesthetic ticket launcher dropdown configuration", inline=False)
+                embed.add_field(name="/ticket_add", value="└ Grant a user access to the ticket channel", inline=False)
+                embed.add_field(name="/ticket_remove", value="└ Revoke a user's access from the ticket channel", inline=False)
+                embed.add_field(name="/ticket_rename", value="└ Quick-rename the channel tag prefix", inline=False)
+            elif selection == "utility":
+                embed.add_field(name="/ping", value="└ Calculates system gateway ping and response latency.", inline=False)
+                embed.add_field(name="/stats", value="└ Compiles host system performance metrics.", inline=False)
+            elif selection == "tools":
+                embed.add_field(name="/poll", value="└ Generates an interactive feedback binary poll option array.", inline=False)
+                embed.add_field(name="/calculator", value="└ Opens a secure ui calculations matrix.", inline=False)
+            else:
+                embed.add_field(name="/invite", value="└ Generates secondary connection routing links for the cluster.", inline=False)
+        else:
+            embed.description = f"Here are the active, public application commands available inside **{cog_name}**:\n\n"
+            commands_found = False
+            for cmd in cog.get_app_commands():
+                # EXCLUSION RULE: Skip commands containing private server IDs
+                if cmd.guild_ids:
+                    continue
+                    
+                embed.add_field(
+                    name=f"/{cmd.name}",
+                    value=f"└ {cmd.description or 'No structural description provided.'}",
+                    inline=False
+                )
+                commands_found = True
 
-        elif selection == "tickets":
-            embed.title = "🎫 Module: Support Line Management"
-            embed.description = "Publicly exposed controller paths for routing active incidents:"
-            embed.add_field(name="`/ticket_add` [member]", value="`└─` Authorizes a profile token to access an active ticket stream.", inline=False)
-            embed.add_field(name="`/ticket_remove` [member]", value="`└─` Drops a user access path entirely from the local channel array.", inline=False)
-            embed.add_field(name="`/ticket_rename` [name]", value="`└─` Modifies the trailing metadata string label of a channel safely.", inline=False)
-            embed.add_field(name="📌 Persistent Dashboard Panel", value="Use `/ticket_setup` via admin clearance to deploy the automated dropdown interface inside your operational zones.", inline=False)
+            if not commands_found:
+                embed.description += "*No public global commands found in this module.*"
 
-        elif selection == "tools":
-            embed.title = "🛠️ Module: Automation Engineering Tools"
-            embed.description = "Ancillary data interaction features engineered for general server members:"
-            embed.add_field(name="`/poll` [question]", value="`└─` Generates a clean feedback interaction stack for community metrics.", inline=False)
-            embed.add_field(name="`/calculator`", value="`└─` Opens a secure visual calculator grid for simple floating math operations.", inline=False)
-            embed.add_field(name="`/remind` [time] [text]", value="`└─` Places a back-end worker background task to ping you on custom intervals.", inline=False)
-
-        elif selection == "support":
-            embed.title = "🆘 Module: Centralized Support Infrastructure"
-            embed.description = "Direct routing assistance arrays to link with development nodes:"
-            embed.add_field(name="`/about`", value="`└─` Displays details about the framework, framework version, and software attributes.", inline=False)
-            embed.add_field(name="`/invite`", value="`└─` Generates a clean URL redirection path to link the bot to other remote clusters.", inline=False)
-            embed.add_field(name="🌐 System Terminal Links", value="[Developer Profile](https://discord.com/users/915121966562095144) • [Control Panel Network](https://discord.gg/)", inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=self.view)
+        # Safe update modification pattern utilizing direct execution blocks
+        await interaction.response.edit_message(embed=embed)
 
 
-# --- HELP VIEW CONTAINER ---
-class HelpLauncher(discord.ui.View):
+# --- HELP VIEW LAUNCHER ---
+class HelpView(discord.ui.View):
     def __init__(self, bot: commands.Bot):
-        super().__init__(timeout=180)
+        super().__init__(timeout=180)  # Timeout after 3 minutes of inactivity
         self.add_item(HelpDropdown(bot))
 
 
-# --- CENTRAL COMMAND COG ---
-class HelpCommand(commands.Cog):
+# =========================================================
+# SYSTEM HELP COG MODULE
+# =========================================================
+class Help(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="help", description="Queries the central control interface matrix directory")
-    async def help_cmd(self, interaction: discord.Interaction):
+    @app_commands.command(name="help", description="📖 Open the central command catalog directory and help documentation")
+    async def help_command(self, interaction: discord.Interaction):
         embed = discord.Embed(
-            title="✦ ━━━━━━━ Mainframe System Diagnostics ━━━━━━━ ✦",
+            title="✦ ━━━━━━━ System Directory Hub ━━━━━━━ ✦",
             description=(
-                f"Welcome to the **{BOT_VERSION}** Central Command Hub.\n"
-                f"This environment provides links directly to your public module endpoints.\n\n"
-                f"Use the drop-down selector matrix below to query active operational commands."
+                f"Welcome to the interactive system guide manual.\n\n"
+                f"Use the drop-down selection menu element down below to parse through "
+                f"available public commands sorted by their respective framework layers."
             ),
-            color=COLOR_MAIN_PANEL,
-            timestamp=discord.utils.utcnow()
+            color=COLOR_DARK
         )
         
-        embed.add_field(name="🌐 Network Node", value="`Render Cloud Platform`", inline=True)
-        embed.add_field(name="⚡ Gateway Latency", value=f"`{round(self.bot.latency * 1000)}ms`", inline=True)
-        embed.add_field(name="🔒 Core Security", value="`AES-Encrypted Streams`", inline=True)
-        
-        if interaction.guild and interaction.guild.icon:
-            embed.set_thumbnail(url=interaction.guild.icon.url)
+        if self.bot.user:
+            embed.set_thumbnail(url=self.bot.user.display_avatar.url)
             
-        embed.set_footer(text=BRANDED_FOOTER)
-        
-        await interaction.response.send_message(embed=embed, view=HelpLauncher(self.bot))
+        embed.add_field(name="🛡️ Privacy Layer Active", value="`Private / Guild-Locked commands are filtered natively.`", inline=False)
+        embed.set_footer(text=f"System Framework Core • {CREATOR_CREDIT}")
+
+        view = HelpView(self.bot)
+        await interaction.response.send_message(embed=embed, view=view)
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(HelpCommand(bot))
+    await bot.add_cog(Help(bot))
