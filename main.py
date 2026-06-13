@@ -42,7 +42,8 @@ class EnderBot(commands.Bot):
             "cogs.admin_utils",
             "cogs.error_handler",
             "cogs.onboard",
-            "cogs.help"  # <-- Added your new public help menu matrix!
+            "cogs.help",
+            "cogs.tickets" # <-- Added your new public help menu matrix!
         ]
 
         for cog in cogs_to_load:
