@@ -27,14 +27,15 @@ class EnderBot(commands.Bot):
     async def setup_hook(self):
         logger.info("Loading extensions...")
 
-      cogs_to_load = [
-    "cogs.automod",
-    "cogs.autorole",
-    "cogs.info",
-    "cogs.logging",      # <-- Ensure this matches the newly renamed file!
-    "cogs.moderation",
-    "cogs.tickets"
-]
+        # Dynamic Extension Cogs registry
+        cogs_to_load = [
+            "cogs.automod",
+            "cogs.autorole",
+            "cogs.info",
+            "cogs.logging",
+            "cogs.moderation",
+            "cogs.tickets"
+        ]
 
         for cog in cogs_to_load:
             try:
@@ -58,7 +59,7 @@ async def main():
         logger.critical("Initialization aborted: 'DISCORD_TOKEN' environment key missing.")
         return
 
-    # 1. CRISIS PREVENTER: Run database handshake FIRST and block everything until it succeeds.
+    # Run database handshake FIRST and block everything until it succeeds.
     try:
         logger.info("Establishing connection to MongoDB Cluster...")
         await db_manager.initialize() 
@@ -70,7 +71,7 @@ async def main():
     bot = EnderBot()
     app.bot = bot
 
-    # 2. Now that the database is guaranteed to be online, launch web traffic and bot socket gateways safely
+    # Launch web traffic and bot socket gateways concurrently
     async with asyncio.TaskGroup() as tg:
         logger.info(f"Deploying dashboard webserver framework targeting port: {PORT}")
         tg.create_task(run_dashboard(bot, PORT))
