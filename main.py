@@ -11,7 +11,6 @@ from dashboard import run_dashboard, app
 
 # CRITICAL FIX: Import the interactive View classes for persistent registry
 from cogs.tickets import TicketLauncher, TicketControls
-from cogs.help import HelpView
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Bot.Main")
